@@ -1,0 +1,18 @@
+{
+    "version": "1.0.0",
+    "author": "oparada1988",
+    "thumbnail": "assets/banner.png",
+    "id": "com_oparada1988_DeckWave",
+    "name": "DeckWave",
+    "descriptions": {
+        "en_US": "Real-time audio visualizer wave bar plugin for Stream Deck MK2, XL, and Plus with multi-stop gradients, dynamic application audio targeting, and smart hardware page provisioning."
+    },
+    "short-descriptions": {
+        "en_US": "Full-deck audio visualizer wave bars"
+    },
+    "tags": ["Audio", "Visualizer", "Media", "Utility"],
+    "minimum-app-version": "1.0.0",
+    "app-version": "1.5.0-beta",
+    "description": "Real-time audio visualizer wave bar plugin for Stream Deck MK2, XL, and Plus with multi-stop gradients, dynamic application audio targeting, and smart hardware page provisioning.",
+    "short-description": "Full-deck audio visualizer wave bars"
+}

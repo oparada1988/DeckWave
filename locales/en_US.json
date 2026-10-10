@@ -1,0 +1,50 @@
+{
+    "plugin.name": "DeckWave",
+    "plugin.description": "Real-time audio visualizer wave bar plugin for Stream Deck MK2, XL, and Plus with multi-stop gradients and smart hardware page provisioning.",
+
+    "actions.launcher.name": "DeckWave Launcher",
+    "actions.launcher.description": "Opens the dedicated full-deck audio visualizer page and manages visualizer settings",
+    "actions.launcher.hdr-audio.title": "Audio Settings",
+    "actions.launcher.hdr-audio.subtitle": "Select audio input stream, gain, and smoothing response",
+    "actions.launcher.source.title": "Audio Source",
+    "actions.launcher.source.subtitle": "Monitor default output or target a specific application stream",
+    "actions.launcher.gain.title": "Sensitivity Gain",
+    "actions.launcher.gain.subtitle": "Multiply incoming audio amplitude (0.5x to 3.0x)",
+    "actions.launcher.falloff.title": "Decay Speed",
+    "actions.launcher.falloff.subtitle": "Physics speed for meter falloff animation",
+
+    "actions.launcher.hdr-style.title": "Visualizer Style",
+    "actions.launcher.hdr-style.subtitle": "Bar rendering modes and background appearance",
+    "actions.launcher.style.title": "Bar Style",
+    "actions.launcher.style.subtitle": "Solid fill, stepped LED segments, or peak hold caps",
+    "actions.launcher.bg-color.title": "Bar Background Color",
+    "actions.launcher.bg-color.subtitle": "Color for inactive/unfilled bar background",
+    "actions.launcher.peak-color.title": "Peak Indicator Color",
+    "actions.launcher.peak-color.subtitle": "Color of the floating peak hold tick line",
+
+    "actions.launcher.hdr-color.title": "Gradient & Color Engine",
+    "actions.launcher.hdr-color.subtitle": "Configure single color or multi-stop gradients (up to 5 stops)",
+    "actions.launcher.color-mode.title": "Color Mode",
+    "actions.launcher.color-mode.subtitle": "Choose solid color or 2, 3, 4, or 5-color vertical gradient",
+    "actions.launcher.stop1.title": "Stop 1 (Base / Low)",
+    "actions.launcher.stop1.subtitle": "Base color at the bottom of the bars",
+    "actions.launcher.stop2.title": "Stop 2 (Low-Mid)",
+    "actions.launcher.stop2.subtitle": "Color transition point",
+    "actions.launcher.stop3.title": "Stop 3 (Mid)",
+    "actions.launcher.stop3.subtitle": "Middle color transition point",
+    "actions.launcher.stop4.title": "Stop 4 (High-Mid)",
+    "actions.launcher.stop4.subtitle": "Upper color transition point",
+    "actions.launcher.stop5.title": "Stop 5 (Peak / High)",
+    "actions.launcher.stop5.subtitle": "Peak color at the very top of the bars",
+
+    "actions.launcher.hdr-pages.title": "Hardware Page Setup",
+    "actions.launcher.hdr-pages.subtitle": "Automatically setup visualizer pages for connected Stream Decks",
+    "actions.launcher.setup-pages.title": "Provision Visualizer Pages",
+    "actions.launcher.setup-pages.subtitle": "Create dedicated pages only for actively connected Stream Deck models",
+
+    "actions.bar.name": "DeckWave Bar",
+    "actions.bar.description": "Visualizer column bar cell with automatic hardware coordinate detection",
+
+    "actions.return.name": "DeckWave Return",
+    "actions.return.description": "Exits the visualizer and returns to the previous Stream Deck page"
+}
