@@ -8,7 +8,7 @@ import os
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, GLib
+from gi.repository import Gtk, Adw, Gdk, GLib
 from loguru import logger as log
 
 from src.backend.PluginManager.ActionBase import ActionBase
@@ -175,18 +175,24 @@ class DeckWaveLauncherAction(ActionBase):
         style_row.connect("notify::selected", self._on_style_changed)
         style_group.add(style_row)
 
-        # Bar Background Color Entry
-        bg_row = Adw.EntryRow()
-        bg_row.set_title("Bar Background Color (Hex)")
-        bg_row.set_text(settings.get("bg_color", "#121216"))
-        bg_row.connect("changed", lambda r: self._on_text_setting_changed("bg_color", r.get_text()))
+        # Bar Background Color Picker
+        bg_hex = settings.get("bg_color", "#121216")
+        bg_row = self._create_color_row(
+            title="Bar Background Color",
+            current_hex=bg_hex,
+            on_changed_cb=lambda hex_val: self._on_color_setting_changed("bg_color", hex_val),
+            dialog_title="Select Background Color"
+        )
         style_group.add(bg_row)
 
-        # Peak Cap Color Entry
-        peak_row = Adw.EntryRow()
-        peak_row.set_title("Peak Indicator Color (Hex)")
-        peak_row.set_text(settings.get("peak_color", "#FFFFFF"))
-        peak_row.connect("changed", lambda r: self._on_text_setting_changed("peak_color", r.get_text()))
+        # Peak Cap Color Picker
+        peak_hex = settings.get("peak_color", "#FFFFFF")
+        peak_row = self._create_color_row(
+            title="Peak Indicator Color",
+            current_hex=peak_hex,
+            on_changed_cb=lambda hex_val: self._on_color_setting_changed("peak_color", hex_val),
+            dialog_title="Select Peak Indicator Color"
+        )
         style_group.add(peak_row)
 
         group.add(style_group)
@@ -220,18 +226,20 @@ class DeckWaveLauncherAction(ActionBase):
 
         self._stop_rows = []
         stop_labels = [
-            ("Stop 1 (Base / Low)", "Bottom color"),
-            ("Stop 2 (Low-Mid)", "Transition point 2"),
-            ("Stop 3 (Mid)", "Middle color"),
-            ("Stop 4 (High-Mid)", "Transition point 4"),
-            ("Stop 5 (Peak / High)", "Top peak color")
+            ("Stop 1 (Base / Low)", "Select Base Color"),
+            ("Stop 2 (Low-Mid)", "Select Low-Mid Color"),
+            ("Stop 3 (Mid)", "Select Mid Color"),
+            ("Stop 4 (High-Mid)", "Select High-Mid Color"),
+            ("Stop 5 (Peak / High)", "Select Peak Color")
         ]
 
-        for i, (title, sub) in enumerate(stop_labels):
-            s_row = Adw.EntryRow()
-            s_row.set_title(title)
-            s_row.set_text(stops[i])
-            s_row.connect("changed", self._make_stop_changed_handler(i))
+        for i, (title, dlg_title) in enumerate(stop_labels):
+            s_row = self._create_color_row(
+                title=title,
+                current_hex=stops[i],
+                on_changed_cb=self._make_stop_color_changed_handler(i),
+                dialog_title=dlg_title
+            )
             grad_group.add(s_row)
             self._stop_rows.append(s_row)
 
@@ -328,9 +336,55 @@ class DeckWaveLauncherAction(ActionBase):
             if hasattr(self.plugin_base, "set_global_settings"):
                 self.plugin_base.set_global_settings(settings)
 
-    def _on_text_setting_changed(self, key: str, text: str):
+    def _create_color_row(
+        self,
+        title: str,
+        current_hex: str,
+        on_changed_cb,
+        dialog_title: str = "Select Color"
+    ) -> Adw.ActionRow:
+        row = Adw.ActionRow()
+        row.set_title(title)
+        row.set_subtitle(current_hex)
+
+        rgba = Gdk.RGBA()
+        if not rgba.parse(current_hex):
+            rgba.parse("#FFFFFF")
+
+        if hasattr(Gtk, "ColorDialogButton"):
+            dialog = Gtk.ColorDialog(title=dialog_title)
+            dialog.set_with_alpha(False)
+            color_btn = Gtk.ColorDialogButton(dialog=dialog)
+            color_btn.set_valign(Gtk.Align.CENTER)
+            color_btn.set_rgba(rgba)
+
+            def _on_color_set(btn, pspec):
+                new_rgba = btn.get_rgba()
+                hex_val = f"#{int(round(new_rgba.red * 255)):02X}{int(round(new_rgba.green * 255)):02X}{int(round(new_rgba.blue * 255)):02X}"
+                row.set_subtitle(hex_val)
+                on_changed_cb(hex_val)
+
+            color_btn.connect("notify::rgba", _on_color_set)
+        else:
+            color_btn = Gtk.ColorButton()
+            color_btn.set_valign(Gtk.Align.CENTER)
+            color_btn.set_use_alpha(False)
+            color_btn.set_rgba(rgba)
+
+            def _on_color_chosen(btn):
+                new_rgba = btn.get_rgba()
+                hex_val = f"#{int(round(new_rgba.red * 255)):02X}{int(round(new_rgba.green * 255)):02X}{int(round(new_rgba.blue * 255)):02X}"
+                row.set_subtitle(hex_val)
+                on_changed_cb(hex_val)
+
+            color_btn.connect("color-set", _on_color_chosen)
+
+        row.add_suffix(color_btn)
+        return row
+
+    def _on_color_setting_changed(self, key: str, hex_val: str):
         settings = self.get_settings()
-        settings[key] = text.strip()
+        settings[key] = hex_val.upper()
         self.set_settings(settings)
         if hasattr(self.plugin_base, "set_global_settings"):
             self.plugin_base.set_global_settings(settings)
@@ -353,13 +407,13 @@ class DeckWaveLauncherAction(ActionBase):
         for i, row in enumerate(self._stop_rows):
             row.set_visible(i < visible_count)
 
-    def _make_stop_changed_handler(self, index: int):
-        def _handler(row):
+    def _make_stop_color_changed_handler(self, index: int):
+        def _handler(hex_val: str):
             settings = self.get_settings()
             stops = settings.get("color_stops", ["#00FF88", "#00D4FF", "#9D00FF", "#FF0088", "#FF3300"])
             while len(stops) <= index:
                 stops.append("#FFFFFF")
-            stops[index] = row.get_text().strip()
+            stops[index] = hex_val.upper()
             settings["color_stops"] = stops
             self.set_settings(settings)
             if hasattr(self.plugin_base, "set_global_settings"):
