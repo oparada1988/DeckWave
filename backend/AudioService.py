@@ -41,16 +41,16 @@ class AudioService:
         self._peak_hold_times = {}
         self._state_lock = threading.Lock()
 
-        # FFT settings
+        # FFT settings: 1024 samples @ 44.1kHz = ~23ms latency (fast responsive FFT)
         self.sample_rate = 44100
-        self.chunk_size = 2048
+        self.chunk_size = 1024
         self.window = np.hanning(self.chunk_size)
 
-        # Falloff rates per frame (~20 FPS)
+        # Falloff rates per frame (~30 FPS rendering)
         self.falloff_rates = {
-            "fast": 0.08,
-            "normal": 0.045,
-            "slow": 0.025
+            "fast": 0.09,
+            "normal": 0.05,
+            "slow": 0.028
         }
 
     def set_settings(self, target_source: str = "default", gain: float = 1.2, decay_speed: str = "normal"):
@@ -206,12 +206,13 @@ class AudioService:
         target = self.target_source or "default"
 
         # Check if parec is available (standard in Flatpak with pulseaudio socket)
-        # Using parec:
+        # Using parec with 20ms low latency to eliminate buffering stutter:
         cmd = [
             "parec",
             "--raw",
             f"--rate={self.sample_rate}",
-            "--channels=1"
+            "--channels=1",
+            "--latency-msec=20"
         ]
 
         if target.startswith("stream:"):
@@ -267,7 +268,7 @@ class AudioService:
                 if not raw_data or len(raw_data) < bytes_to_read:
                     # Apply decay on silence or underrun
                     self._decay_all()
-                    time.sleep(0.03)
+                    time.sleep(0.02)
                     continue
 
                 # Convert raw PCM bytes to numpy int16 array
@@ -285,12 +286,9 @@ class AudioService:
                     band_amps = self._compute_frequency_bands(fft_mag, num_bands)
                     self._update_levels(num_bands, band_amps)
 
-                # Cap loop at ~30 FPS to save CPU
-                time.sleep(0.015)
-
             except Exception as e:
                 log.debug(f"Audio capture loop exception: {e}")
-                time.sleep(0.05)
+                time.sleep(0.02)
 
         if self.process:
             try:
@@ -304,9 +302,9 @@ class AudioService:
         n_bins = len(fft_mag)
         freq_step = (self.sample_rate / 2.0) / n_bins
 
-        # Logarithmic frequency ranges: ~40 Hz to ~16,000 Hz
-        min_freq = 40.0
-        max_freq = 15000.0
+        # Logarithmic frequency ranges: ~30 Hz to ~16,000 Hz
+        min_freq = 30.0
+        max_freq = 16000.0
 
         # Calculate logarithmic frequency cutoffs
         log_cutoffs = np.geomspace(min_freq, max_freq, num_bands + 1)
@@ -323,16 +321,17 @@ class AudioService:
             mag_slice = fft_mag[bin_low:bin_high]
             val = float(np.mean(mag_slice)) if len(mag_slice) > 0 else 0.0
 
-            # Bass boost & high-end equalization compensation
-            # High frequencies naturally carry less amplitude in music
-            high_boost = 1.0 + (i / float(num_bands)) * 2.2
-            val *= high_boost
+            # Frequency curve compensation: high frequencies naturally have less energy
+            # Boost progressively from lower mids to highs
+            eq_boost = 1.0 + (i / float(num_bands)) * 2.8
+            val *= eq_boost
 
-            # Apply user sensitivity gain
-            val *= self.gain
+            # Apply sensitivity gain
+            val *= (self.gain * 1.5)
 
-            # Non-linear perceptual scaling (power law)
-            norm_val = math.pow(min(1.0, val * 4.5), 0.75)
+            # Perceptual logarithmic-like response (square root / power scaling)
+            # Produces lively, energetic bar movement across typical music mixing levels
+            norm_val = math.pow(min(1.0, val * 3.8), 0.65)
             band_values.append(max(0.0, min(1.0, norm_val)))
 
         return band_values

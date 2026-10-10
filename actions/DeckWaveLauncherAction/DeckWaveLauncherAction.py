@@ -40,11 +40,14 @@ class DeckWaveLauncherAction(ActionBase):
         if hasattr(self.plugin_base, "_auto_provision_pages"):
             self.plugin_base._auto_provision_pages()
 
-        # Apply settings to AudioService
+        # Apply settings to AudioService and PluginBase
         settings = self.get_settings()
+        if hasattr(self.plugin_base, "set_global_settings") and settings:
+            self.plugin_base.set_global_settings(settings)
+
         self.audio_service.set_settings(
             target_source=settings.get("audio_source", "default"),
-            gain=float(settings.get("gain", 1.2)),
+            gain=float(settings.get("gain", 1.4)),
             decay_speed=settings.get("decay_speed", "normal")
         )
 
@@ -53,6 +56,16 @@ class DeckWaveLauncherAction(ActionBase):
         controller = self.deck_controller
         if not controller:
             return
+
+        settings = self.get_settings()
+        if hasattr(self.plugin_base, "set_global_settings") and settings:
+            self.plugin_base.set_global_settings(settings)
+
+        self.audio_service.set_settings(
+            target_source=settings.get("audio_source", "default"),
+            gain=float(settings.get("gain", 1.4)),
+            decay_speed=settings.get("decay_speed", "normal")
+        )
 
         # Determine deck model
         key_count = 15
@@ -279,6 +292,8 @@ class DeckWaveLauncherAction(ActionBase):
             settings = self.get_settings()
             settings["audio_source"] = src_id
             self.set_settings(settings)
+            if hasattr(self.plugin_base, "set_global_settings"):
+                self.plugin_base.set_global_settings(settings)
             self.audio_service.set_settings(target_source=src_id)
 
     def _on_gain_changed(self, scale):
@@ -286,6 +301,8 @@ class DeckWaveLauncherAction(ActionBase):
         settings = self.get_settings()
         settings["gain"] = val
         self.set_settings(settings)
+        if hasattr(self.plugin_base, "set_global_settings"):
+            self.plugin_base.set_global_settings(settings)
         self.audio_service.set_settings(gain=val)
 
     def _on_decay_changed(self, combo, param):
@@ -296,6 +313,8 @@ class DeckWaveLauncherAction(ActionBase):
             settings = self.get_settings()
             settings["decay_speed"] = val
             self.set_settings(settings)
+            if hasattr(self.plugin_base, "set_global_settings"):
+                self.plugin_base.set_global_settings(settings)
             self.audio_service.set_settings(decay_speed=val)
 
     def _on_style_changed(self, combo, param):
@@ -306,11 +325,15 @@ class DeckWaveLauncherAction(ActionBase):
             settings = self.get_settings()
             settings["bar_style"] = val
             self.set_settings(settings)
+            if hasattr(self.plugin_base, "set_global_settings"):
+                self.plugin_base.set_global_settings(settings)
 
     def _on_text_setting_changed(self, key: str, text: str):
         settings = self.get_settings()
         settings[key] = text.strip()
         self.set_settings(settings)
+        if hasattr(self.plugin_base, "set_global_settings"):
+            self.plugin_base.set_global_settings(settings)
 
     def _on_color_mode_changed(self, combo, param):
         modes = ["1-color", "2-color", "3-color", "4-color", "5-color"]
@@ -320,6 +343,8 @@ class DeckWaveLauncherAction(ActionBase):
             settings = self.get_settings()
             settings["color_mode"] = val
             self.set_settings(settings)
+            if hasattr(self.plugin_base, "set_global_settings"):
+                self.plugin_base.set_global_settings(settings)
             self._update_stop_visibility(val)
 
     def _update_stop_visibility(self, mode: str):
@@ -337,6 +362,8 @@ class DeckWaveLauncherAction(ActionBase):
             stops[index] = row.get_text().strip()
             settings["color_stops"] = stops
             self.set_settings(settings)
+            if hasattr(self.plugin_base, "set_global_settings"):
+                self.plugin_base.set_global_settings(settings)
         return _handler
 
     def _on_provision_clicked(self, button):

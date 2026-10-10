@@ -30,7 +30,7 @@ class GradientEngine:
         t = max(0.0, min(1.0, t))
         r = int(c1[0] + (c2[0] - c1[0]) * t)
         g = int(c1[1] + (c2[1] - c1[1]) * t)
-        b = int(c2[2] + (c2[2] - c1[2]) * t)
+        b = int(c1[2] + (c2[2] - c1[2]) * t)
         return (r, g, b)
 
     def get_color_at_height(self, ratio: float, stops: list[tuple[int, int, int]]) -> tuple[int, int, int]:
@@ -50,6 +50,37 @@ class GradientEngine:
             return stops[-1]
         t = pos - idx
         return self.interpolate_color(stops[idx], stops[idx + 1], t)
+
+    def get_cached_gradient_strip(
+        self,
+        key_width: int,
+        total_rows: int,
+        key_height: int,
+        stops_rgb: tuple[tuple[int, int, int], ...],
+        bar_margin: int
+    ) -> Image.Image:
+        """
+        Pre-renders and caches the entire vertical column gradient strip across all rows.
+        This turns per-frame line-by-line drawing into instantaneous fast memory crops/pastes!
+        """
+        total_height = total_rows * key_height
+        cache_key = (key_width, total_height, stops_rgb, bar_margin)
+        if cache_key in self._gradient_cache:
+            return self._gradient_cache[cache_key]
+
+        strip = Image.new("RGBA", (key_width, total_height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(strip)
+        bar_x0 = bar_margin
+        bar_x1 = key_width - bar_margin - 1
+
+        for y in range(total_height):
+            # 0 is top of the deck, total_height - 1 is bottom
+            ratio = (total_height - 1 - y) / float(max(1, total_height - 1))
+            color = self.get_color_at_height(ratio, list(stops_rgb))
+            draw.line([(bar_x0, y), (bar_x1, y)], fill=color)
+
+        self._gradient_cache[cache_key] = strip
+        return strip
 
     def render_key_cell(
         self,
@@ -140,15 +171,25 @@ class GradientEngine:
                 draw.rectangle([bar_x0, y_top, bar_x1, y_bottom], fill=color)
 
         else:
-            # Continuous gradient bar
+            # Continuous gradient bar using pre-rendered strip
             if fill_pixels > 0:
-                # Render line by line for smooth vertical gradient
-                for py in range(key_height - fill_pixels, key_height):
-                    # Inverted: py = key_height-1 is bottom of this key
-                    py_ratio = (key_height - 1 - py) / float(key_height)
-                    global_ratio = row_min_level + (py_ratio * row_height_span)
-                    color = self.get_color_at_height(global_ratio, stops_rgb)
-                    draw.line([(bar_x0, py), (bar_x1, py)], fill=color)
+                stops_tuple = tuple(stops_rgb)
+                full_strip = self.get_cached_gradient_strip(
+                    key_width=key_width,
+                    total_rows=total_rows,
+                    key_height=key_height,
+                    stops_rgb=stops_tuple,
+                    bar_margin=bar_margin
+                )
+                # Calculate global vertical slice for this row:
+                # row 0 is top row (y: 0 to key_height)
+                # row total_rows-1 is bottom row
+                cell_strip_y0 = row * key_height
+                active_strip_y0 = cell_strip_y0 + (key_height - fill_pixels)
+                active_strip_y1 = cell_strip_y0 + key_height
+
+                active_slice = full_strip.crop((0, active_strip_y0, key_width, active_strip_y1))
+                img.paste(active_slice, (0, key_height - fill_pixels), active_slice)
 
         # Peak indicator line (if peak falls within this key)
         if peak_level > 0.0 and (row_min_level <= peak_level <= row_max_level):

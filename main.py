@@ -206,11 +206,25 @@ class DeckWavePlugin(PluginBase):
         if not any_visualizer_active:
             self.audio_service.stop()
 
+    def set_global_settings(self, new_settings: dict):
+        """Updates and caches global visualizer settings across all active bars."""
+        if not hasattr(self, "_cached_global_settings"):
+            self._cached_global_settings = self.get_global_settings()
+        self._cached_global_settings.update(new_settings)
+        if hasattr(self, "set_settings"):
+            try:
+                self.set_settings(self._cached_global_settings)
+            except Exception:
+                pass
+
     def get_global_settings(self) -> dict:
         """Retrieves visualizer settings from plugin settings or launcher defaults."""
+        if hasattr(self, "_cached_global_settings") and self._cached_global_settings:
+            return self._cached_global_settings
+
         defaults = {
             "audio_source": "default",
-            "gain": 1.2,
+            "gain": 1.4,
             "decay_speed": "normal",
             "bar_style": "solid",
             "color_mode": "3-color",
@@ -221,4 +235,5 @@ class DeckWavePlugin(PluginBase):
         # In StreamController, plugin-level settings or launcher settings can be stored
         plugin_settings = self.get_settings() if hasattr(self, "get_settings") else {}
         defaults.update(plugin_settings)
+        self._cached_global_settings = defaults
         return defaults

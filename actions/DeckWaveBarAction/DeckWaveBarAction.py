@@ -60,8 +60,8 @@ class DeckWaveBarAction(ActionBase):
 
     def _start_render_loop(self):
         if self._timer_id is None:
-            # 50ms = 20 FPS (optimal for USB 2.0 Stream Deck HID)
-            self._timer_id = GLib.timeout_add(50, self._render_tick)
+            # 33ms = ~30 FPS (silky smooth visualizer motion without overloading StreamDeck HID queue)
+            self._timer_id = GLib.timeout_add(33, self._render_tick)
 
     def _stop_render_loop(self):
         if self._timer_id is not None:
@@ -84,8 +84,8 @@ class DeckWaveBarAction(ActionBase):
         level = levels[self._col]
         peak = peaks[self._col] if self._col < len(peaks) else 0.0
 
-        # Dirty-check caching: skip redrawing if audio delta is imperceptible
-        if abs(level - self._last_level) < 0.012 and abs(peak - self._last_peak) < 0.012:
+        # Dirty-check caching: skip redrawing if audio delta is imperceptible (< 0.5% change)
+        if abs(level - self._last_level) < 0.005 and abs(peak - self._last_peak) < 0.005:
             return True
 
         self._last_level = level
