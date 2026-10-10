@@ -36,6 +36,8 @@ class DeckWaveBarAction(ActionBase):
         self._last_level: float = -1.0
         self._last_peak: float = -1.0
         self._showing_return: bool = False
+        self._return_opacity: float = 1.0
+        self._silent_frames: int = 0
 
     def on_ready(self):
         self._calc_coordinates()
@@ -92,27 +94,60 @@ class DeckWaveBarAction(ActionBase):
         is_bottom_left = (self._col == 0 and self._row == (self._total_rows - 1))
         is_return_enabled = action_settings.get("is_return_key", is_bottom_left)
 
-        # Smart idle detection: audio is idle when level & peak fall near zero (< 2%)
-        is_idle = (level < 0.02 and peak < 0.02)
+        # Global deck activity detection: check if ANY band across the entire device is playing audio
+        is_any_active = any(l >= 0.02 for l in levels) or any(p >= 0.02 for p in peaks)
 
-        if is_return_enabled and is_idle:
-            # Show Return Arrow Button during silence
-            if not self._showing_return:
-                self._showing_return = True
-                settings = self.plugin_base.get_global_settings()
-                bg_color = settings.get("bg_color", "#121216")
-                arrow_color = settings.get("peak_color", "#FFFFFF")
-                return_img = self.gradient_engine.render_return_cell(
-                    key_width=self._key_width,
-                    key_height=self._key_height,
-                    bg_color_hex=bg_color,
-                    arrow_color_hex=arrow_color
-                )
-                self.set_media(image=return_img, update=True)
-            return True
+        if is_return_enabled:
+            settings = self.plugin_base.get_global_settings()
+            bg_color = settings.get("bg_color", "#121216")
+            arrow_color = settings.get("peak_color", "#FFFFFF")
 
-        # When audio is active (or normal visualizer key):
-        self._showing_return = False
+            if is_any_active:
+                # Active audio anywhere on deck -> fade OUT return icon immediately
+                self._silent_frames = 0
+                if self._return_opacity > 0.0:
+                    self._return_opacity = max(0.0, self._return_opacity - 0.20)
+                    return_img = self.gradient_engine.render_return_cell(
+                        key_width=self._key_width,
+                        key_height=self._key_height,
+                        bg_color_hex=bg_color,
+                        arrow_color_hex=arrow_color,
+                        opacity=self._return_opacity
+                    )
+                    self.set_media(image=return_img, update=True)
+                    self._last_level = -1.0  # Force visualizer redrawing immediately once opacity hits 0
+                    return True
+                self._showing_return = False
+            else:
+                # Silence across the whole deck -> wait brief debounce (~260ms), then fade IN return icon
+                self._silent_frames += 1
+                if self._silent_frames >= 8:
+                    if self._return_opacity < 1.0:
+                        self._return_opacity = min(1.0, self._return_opacity + 0.15)
+                        return_img = self.gradient_engine.render_return_cell(
+                            key_width=self._key_width,
+                            key_height=self._key_height,
+                            bg_color_hex=bg_color,
+                            arrow_color_hex=arrow_color,
+                            opacity=self._return_opacity
+                        )
+                        self.set_media(image=return_img, update=True)
+                        return True
+                    else:
+                        if not self._showing_return:
+                            self._showing_return = True
+                            return_img = self.gradient_engine.render_return_cell(
+                                key_width=self._key_width,
+                                key_height=self._key_height,
+                                bg_color_hex=bg_color,
+                                arrow_color_hex=arrow_color,
+                                opacity=1.0
+                            )
+                            self.set_media(image=return_img, update=True)
+                        return True
+        else:
+            self._showing_return = False
+            self._return_opacity = 0.0
 
         # Dirty-check caching: skip redrawing if audio delta is imperceptible (< 0.5% change)
         if abs(level - self._last_level) < 0.005 and abs(peak - self._last_peak) < 0.005:
@@ -177,9 +212,12 @@ class DeckWaveBarAction(ActionBase):
 
     def _on_return_toggle(self, switch, state):
         settings = self.get_settings()
-        settings["is_return_key"] = bool(state)
+        is_enabled = bool(state)
+        settings["is_return_key"] = is_enabled
         self.set_settings(settings)
         # Reset state flag to force redraw
         self._last_level = -1.0
         self._showing_return = False
+        self._return_opacity = 1.0 if is_enabled else 0.0
+        self._silent_frames = 0
         return False

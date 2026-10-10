@@ -206,13 +206,18 @@ class GradientEngine:
         key_width: int,
         key_height: int,
         bg_color_hex: str = "#121216",
-        arrow_color_hex: str = "#FFFFFF"
+        arrow_color_hex: str = "#FFFFFF",
+        opacity: float = 1.0
     ) -> Image.Image:
         """
-        Renders a clean return/back key button for the Stream Deck cell when idle.
+        Renders a clean return/back key button for the Stream Deck cell when idle,
+        with optional opacity (0.0 invisible -> 1.0 fully opaque) for smooth fade animations.
         """
         bg_rgb = self.hex_to_rgb(bg_color_hex)
-        arrow_rgb = self.hex_to_rgb(arrow_color_hex)
+        target_arrow_rgb = self.hex_to_rgb(arrow_color_hex)
+
+        clamped_opacity = max(0.0, min(1.0, opacity))
+        arrow_rgb = self.interpolate_color(bg_rgb, target_arrow_rgb, clamped_opacity)
 
         img = Image.new("RGB", (key_width, key_height), bg_rgb)
         draw = ImageDraw.Draw(img)
