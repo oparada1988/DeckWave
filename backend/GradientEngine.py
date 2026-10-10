@@ -200,3 +200,32 @@ class GradientEngine:
             draw.line([(bar_x0, peak_y), (bar_x1, peak_y)], fill=peak_rgb, width=2)
 
         return img
+
+    def render_return_cell(
+        self,
+        key_width: int,
+        key_height: int,
+        bg_color_hex: str = "#121216",
+        arrow_color_hex: str = "#FFFFFF"
+    ) -> Image.Image:
+        """
+        Renders a clean return/back key button for the Stream Deck cell when idle.
+        """
+        bg_rgb = self.hex_to_rgb(bg_color_hex)
+        arrow_rgb = self.hex_to_rgb(arrow_color_hex)
+
+        img = Image.new("RGB", (key_width, key_height), bg_rgb)
+        draw = ImageDraw.Draw(img)
+
+        # Draw a clean centered return arrow:  <--
+        cx = key_width // 2
+        cy = key_height // 2
+        size = int(min(key_width, key_height) * 0.22)
+
+        # Arrow shaft
+        draw.line([(cx - size, cy), (cx + size, cy)], fill=arrow_rgb, width=max(2, size // 3))
+        # Arrow left head
+        draw.line([(cx - size, cy), (cx - size // 2, cy - size // 2)], fill=arrow_rgb, width=max(2, size // 3))
+        draw.line([(cx - size, cy), (cx - size // 2, cy + size // 2)], fill=arrow_rgb, width=max(2, size // 3))
+
+        return img

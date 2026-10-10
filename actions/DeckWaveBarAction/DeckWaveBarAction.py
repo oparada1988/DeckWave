@@ -8,7 +8,8 @@ based on its physical grid position.
 
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import GLib
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, GLib
 from loguru import logger as log
 
 from src.backend.PluginManager.ActionBase import ActionBase
@@ -34,6 +35,7 @@ class DeckWaveBarAction(ActionBase):
 
         self._last_level: float = -1.0
         self._last_peak: float = -1.0
+        self._showing_return: bool = False
 
     def on_ready(self):
         self._calc_coordinates()
@@ -84,6 +86,34 @@ class DeckWaveBarAction(ActionBase):
         level = levels[self._col]
         peak = peaks[self._col] if self._col < len(peaks) else 0.0
 
+        # Check return key settings for this specific key
+        action_settings = self.get_settings()
+        # Default: if coordinate is bottom-left (e.g. col 0, bottom row) or explicitly enabled
+        is_bottom_left = (self._col == 0 and self._row == (self._total_rows - 1))
+        is_return_enabled = action_settings.get("is_return_key", is_bottom_left)
+
+        # Smart idle detection: audio is idle when level & peak fall near zero (< 2%)
+        is_idle = (level < 0.02 and peak < 0.02)
+
+        if is_return_enabled and is_idle:
+            # Show Return Arrow Button during silence
+            if not self._showing_return:
+                self._showing_return = True
+                settings = self.plugin_base.get_global_settings()
+                bg_color = settings.get("bg_color", "#121216")
+                arrow_color = settings.get("peak_color", "#FFFFFF")
+                return_img = self.gradient_engine.render_return_cell(
+                    key_width=self._key_width,
+                    key_height=self._key_height,
+                    bg_color_hex=bg_color,
+                    arrow_color_hex=arrow_color
+                )
+                self.set_media(image=return_img, update=True)
+            return True
+
+        # When audio is active (or normal visualizer key):
+        self._showing_return = False
+
         # Dirty-check caching: skip redrawing if audio delta is imperceptible (< 0.5% change)
         if abs(level - self._last_level) < 0.005 and abs(peak - self._last_peak) < 0.005:
             return True
@@ -122,3 +152,34 @@ class DeckWaveBarAction(ActionBase):
         """Tapping any visualizer bar returns to the previous page."""
         if hasattr(self.plugin_base, "return_to_origin"):
             self.plugin_base.return_to_origin(self.deck_controller)
+
+    def get_custom_config_area(self) -> Adw.PreferencesGroup:
+        """Action settings: allows toggling smart return button on this key."""
+        group = Adw.PreferencesGroup()
+        group.set_title("DeckWave Bar Settings")
+
+        settings = self.get_settings()
+        is_bottom_left = (self._col == 0 and self._row == (self._total_rows - 1))
+        is_return = settings.get("is_return_key", is_bottom_left)
+
+        switch = Gtk.Switch()
+        switch.set_active(is_return)
+        switch.set_valign(Gtk.Align.CENTER)
+        switch.connect("state-set", self._on_return_toggle)
+
+        row = Adw.ActionRow()
+        row.set_title("Smart Return Button")
+        row.set_subtitle("Show return exit arrow when audio is silent, hide during audio playback")
+        row.add_suffix(switch)
+        group.add(row)
+
+        return group
+
+    def _on_return_toggle(self, switch, state):
+        settings = self.get_settings()
+        settings["is_return_key"] = bool(state)
+        self.set_settings(settings)
+        # Reset state flag to force redraw
+        self._last_level = -1.0
+        self._showing_return = False
+        return False

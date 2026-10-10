@@ -23,7 +23,6 @@ import globals as gl
 # Import actions
 from .actions.DeckWaveLauncherAction.DeckWaveLauncherAction import DeckWaveLauncherAction
 from .actions.DeckWaveBarAction.DeckWaveBarAction import DeckWaveBarAction
-from .actions.DeckWaveReturnAction.DeckWaveReturnAction import DeckWaveReturnAction
 from .backend.AudioService import AudioService
 
 class DeckWavePlugin(PluginBase):
@@ -62,20 +61,6 @@ class DeckWavePlugin(PluginBase):
             }
         )
         self.add_action_holder(self.bar_holder)
-
-        # 3. Register Return Action
-        self.return_holder = ActionHolder(
-            plugin_base=self,
-            action_base=DeckWaveReturnAction,
-            action_id="com_oparada1988_DeckWave::DeckWaveReturnAction",
-            action_name="DeckWave Return",
-            action_support={
-                Input.Key: ActionInputSupport.SUPPORTED,
-                Input.Dial: ActionInputSupport.UNSUPPORTED,
-                Input.Touchscreen: ActionInputSupport.UNSUPPORTED
-            }
-        )
-        self.add_action_holder(self.return_holder)
 
         # Register plugin metadata
         self.register(
