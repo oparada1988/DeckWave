@@ -95,53 +95,157 @@ class AudioService:
     @staticmethod
     def get_active_audio_apps() -> list[dict]:
         """
-        Enumerates active audio application streams from PipeWire.
-        Returns a list of dicts: [{"id": str, "name": str, "app": str}]
+        Enumerates active audio application streams and hardware/virtual sources.
+        Uses pactl (compatible with Flatpak sandbox and native PipeWire/PulseAudio)
+        with fallback to pw-dump.
+        Returns a list of dicts: [{"id": str, "name": str, "type": str}]
         """
-        apps = []
-        try:
-            res = subprocess.run(["pw-dump"], capture_output=True, text=True, timeout=2.0)
-            if res.returncode == 0 and res.stdout:
-                data = json.loads(res.stdout)
-                seen_names = set()
-                for item in data:
-                    props = item.get("info", {}).get("props", {})
-                    media_class = props.get("media.class", "")
-                    app_name = props.get("application.name") or props.get("node.name")
-                    node_id = item.get("id")
+        import re
+        targets = []
 
-                    # We are looking for audio playback streams
-                    if "Stream/Output/Audio" in media_class and app_name and app_name not in seen_names:
-                        seen_names.add(app_name)
-                        apps.append({
-                            "id": str(node_id),
-                            "name": app_name,
-                            "app": props.get("application.name", app_name)
+        # 1. Query PulseAudio/PipeWire sink-inputs (active playback streams) via pactl
+        try:
+            res_inputs = subprocess.run(["pactl", "list", "sink-inputs"], capture_output=True, text=True, timeout=2.0)
+            if res_inputs.returncode == 0 and res_inputs.stdout:
+                blocks = res_inputs.stdout.split("Sink Input #")
+                for b in blocks[1:]:
+                    lines = b.splitlines()
+                    stream_idx = lines[0].strip()
+                    props = {}
+                    for line in lines[1:]:
+                        m = re.match(r'^\s*([a-zA-Z0-9._-]+)\s*=\s*\"(.*)\"$', line)
+                        if m:
+                            props[m.group(1)] = m.group(2)
+                        elif ":" in line and not line.strip().startswith("Properties:"):
+                            k, v = line.split(":", 1)
+                            props[k.strip()] = v.strip()
+
+                    app_name = props.get("application.name")
+                    node_name = props.get("node.name", "")
+                    media_name = props.get("media.name", "")
+                    desc = props.get("device.description", "")
+
+                    if app_name:
+                        display = app_name
+                    elif "WaveController_submix_" in node_name:
+                        sub_part = node_name.split("WaveController_submix_", 1)[1]
+                        parts = sub_part.split("_")
+                        ch = parts[0].capitalize()
+                        mix = parts[1].capitalize() if len(parts) > 1 else ""
+                        display = f"WaveController: {ch} ({mix})"
+                    elif media_name:
+                        display = media_name
+                    elif desc:
+                        display = desc
+                    else:
+                        display = f"Stream #{stream_idx}"
+
+                    targets.append({
+                        "id": f"stream:{stream_idx}",
+                        "name": f"App: {display}",
+                        "type": "stream"
+                    })
+        except Exception as e:
+            log.debug(f"Could not query pactl sink-inputs: {e}")
+
+        # 2. Query PulseAudio/PipeWire sources (hardware devices and virtual mix monitors) via pactl
+        try:
+            res_sources = subprocess.run(["pactl", "list", "sources"], capture_output=True, text=True, timeout=2.0)
+            if res_sources.returncode == 0 and res_sources.stdout:
+                blocks_s = res_sources.stdout.split("Source #")
+                for b in blocks_s[1:]:
+                    lines = b.splitlines()
+                    curr_name = ""
+                    curr_desc = ""
+                    for line in lines[1:]:
+                        line_s = line.strip()
+                        if line_s.startswith("Name:"):
+                            curr_name = line_s.split("Name:", 1)[1].strip()
+                        elif line_s.startswith("Description:"):
+                            curr_desc = line_s.split("Description:", 1)[1].strip()
+
+                    if curr_name:
+                        is_monitor = curr_name.endswith(".monitor")
+                        desc = curr_desc or curr_name
+                        label = f"Monitor: {desc}" if is_monitor else f"Input: {desc}"
+                        targets.append({
+                            "id": f"source:{curr_name}",
+                            "name": label,
+                            "type": "source"
                         })
         except Exception as e:
-            log.debug(f"Could not query pw-dump: {e}")
+            log.debug(f"Could not query pactl sources: {e}")
 
-        return apps
+        # 3. Fallback to pw-dump if pactl produced nothing (native environments without pactl)
+        if not targets:
+            try:
+                res = subprocess.run(["pw-dump"], capture_output=True, text=True, timeout=2.0)
+                if res.returncode == 0 and res.stdout:
+                    data = json.loads(res.stdout)
+                    seen_names = set()
+                    for item in data:
+                        props = item.get("info", {}).get("props", {})
+                        media_class = props.get("media.class", "")
+                        app_name = props.get("application.name") or props.get("node.name")
+                        node_id = item.get("id")
+
+                        if "Stream/Output/Audio" in media_class and app_name and app_name not in seen_names:
+                            seen_names.add(app_name)
+                            targets.append({
+                                "id": f"pw:{node_id}",
+                                "name": f"App: {app_name}",
+                                "type": "stream"
+                            })
+            except Exception as e:
+                log.debug(f"Could not query pw-dump: {e}")
+
+        return targets
 
     def _get_record_command(self) -> list[str]:
-        """Constructs the pw-record command."""
+        """Constructs the audio recording command using parec (or pw-record as fallback)."""
+        target = self.target_source or "default"
+
+        # Check if parec is available (standard in Flatpak with pulseaudio socket)
+        # Using parec:
         cmd = [
-            "pw-record",
-            "--format=s16le",
+            "parec",
+            "--raw",
             f"--rate={self.sample_rate}",
             "--channels=1"
         ]
 
-        # Target specific application node or default output monitor
-        if self.target_source and self.target_source != "default":
-            cmd.extend(["--target", str(self.target_source)])
+        if target.startswith("stream:"):
+            # Target specific sink-input index: parec --monitor-stream=INDEX
+            stream_idx = target.split("stream:", 1)[1]
+            cmd.append(f"--monitor-stream={stream_idx}")
+        elif target.startswith("source:"):
+            # Target specific source or monitor device: parec -d SOURCE_NAME
+            src_name = target.split("source:", 1)[1]
+            cmd.extend(["-d", src_name])
+        elif target == "default" or not target:
+            # Default monitor
+            pass
+        elif target.startswith("pw:"):
+            # Fallback to pw-record for native pipewire node IDs
+            node_id = target.split("pw:", 1)[1]
+            return [
+                "pw-record",
+                "--format=s16le",
+                f"--rate={self.sample_rate}",
+                "--channels=1",
+                "--target", node_id,
+                "-"
+            ]
+        else:
+            # Treat raw string as device name if possible
+            cmd.extend(["-d", target])
 
-        cmd.append("-")  # output raw PCM to stdout
         return cmd
 
     def _capture_loop(self):
         """Background loop reading PCM data and computing FFT bands."""
         cmd = self._get_record_command()
+        log.info(f"Starting DeckWave capture process: {' '.join(cmd)}")
         try:
             self.process = subprocess.Popen(
                 cmd,
@@ -150,7 +254,7 @@ class AudioService:
                 bufsize=self.chunk_size * 2
             )
         except Exception as e:
-            log.error(f"Failed to start pw-record: {e}")
+            log.error(f"Failed to start audio recording process ({cmd[0]}): {e}")
             self.running = False
             return
 

@@ -113,7 +113,7 @@ class DeckWaveLauncherAction(ActionBase):
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         refresh_btn.set_valign(Gtk.Align.CENTER)
         refresh_btn.set_tooltip_text("Refresh active audio streams")
-        refresh_btn.connect("clicked", lambda b: self._refresh_sources())
+        refresh_btn.connect("clicked", lambda b: self._refresh_sources(b))
         self._source_combo.add_suffix(refresh_btn)
         audio_group.add(self._source_combo)
 
@@ -243,22 +243,34 @@ class DeckWaveLauncherAction(ActionBase):
 
         return group
 
-    def _refresh_sources(self):
-        """Populates the Audio Source dropdown with default and active apps."""
-        apps = self.audio_service.get_active_audio_apps()
-        names = ["Default System Audio"]
-        self._source_ids = ["default"]
+    def _refresh_sources(self, button: Gtk.Button | None = None):
+        """Populates the Audio Source dropdown with default, apps, and monitor sources."""
+        if button:
+            button.set_sensitive(False)
+            button.set_icon_name("process-working-symbolic")
 
-        for app in apps:
-            names.append(f"{app['name']} (Application)")
-            self._source_ids.append(app["id"])
+        try:
+            targets = self.audio_service.get_active_audio_apps()
+            names = ["Default System Audio"]
+            self._source_ids = ["default"]
 
-        self._source_model = Gtk.StringList.new(names)
-        if self._source_combo:
-            self._source_combo.set_model(self._source_model)
-            curr = self.get_settings().get("audio_source", "default")
-            idx = self._source_ids.index(curr) if curr in self._source_ids else 0
-            self._source_combo.set_selected(idx)
+            for item in targets:
+                names.append(item["name"])
+                self._source_ids.append(item["id"])
+
+            self._source_model = Gtk.StringList.new(names)
+            if self._source_combo:
+                self._source_combo.set_model(self._source_model)
+                curr = self.get_settings().get("audio_source", "default")
+                idx = self._source_ids.index(curr) if curr in self._source_ids else 0
+                self._source_combo.set_selected(idx)
+        finally:
+            if button:
+                def _restore():
+                    button.set_icon_name("view-refresh-symbolic")
+                    button.set_sensitive(True)
+                    return False
+                GLib.timeout_add(300, _restore)
 
     def _on_source_changed(self, combo, param):
         idx = combo.get_selected()
