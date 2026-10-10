@@ -180,7 +180,7 @@ class DeckWaveLauncherAction(ActionBase):
 
         # --- 3. Gradient Engine Settings ---
         grad_group = Adw.PreferencesGroup()
-        grad_group.set_title("Gradient & Color Palette")
+        grad_group.set_title("Gradient &amp; Color Palette")
 
         self._color_mode_row = Adw.ComboRow()
         self._color_mode_row.set_title("Color Mode")

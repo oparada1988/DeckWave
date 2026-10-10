@@ -223,8 +223,9 @@ class AudioService:
             src_name = target.split("source:", 1)[1]
             cmd.extend(["-d", src_name])
         elif target == "default" or not target:
-            # Default monitor
-            pass
+            # Default monitor for system audio playback: @DEFAULT_MONITOR@
+            # Note: parec without -d defaults to recording from the default *source* (microphone)
+            cmd.extend(["-d", "@DEFAULT_MONITOR@"])
         elif target.startswith("pw:"):
             # Fallback to pw-record for native pipewire node IDs
             node_id = target.split("pw:", 1)[1]
