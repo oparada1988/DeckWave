@@ -100,7 +100,7 @@ class DeckWaveBarAction(ActionBase):
         if is_return_enabled:
             settings = self.plugin_base.get_global_settings()
             bg_color = settings.get("bg_color", "#121216")
-            arrow_color = settings.get("peak_color", "#FFFFFF")
+            arrow_color = "#FFFFFF"  # Return icon is always crisp white
 
             if is_any_active:
                 # Active audio anywhere on deck -> fade OUT return icon immediately
@@ -163,6 +163,7 @@ class DeckWaveBarAction(ActionBase):
         bg_color = settings.get("bg_color", "#121216")
         peak_color = settings.get("peak_color", "#FFFFFF")
         bar_style = settings.get("bar_style", "solid")
+        show_peaks = settings.get("show_peaks", True)
 
         # Render key image slice
         img = self.gradient_engine.render_key_cell(
@@ -177,7 +178,8 @@ class DeckWaveBarAction(ActionBase):
             color_stops=color_stops,
             bg_color_hex=bg_color,
             peak_color_hex=peak_color,
-            bar_style=bar_style
+            bar_style=bar_style,
+            show_peaks=show_peaks
         )
 
         self.set_media(image=img, update=True)

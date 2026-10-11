@@ -28,6 +28,7 @@ class DeckWaveLauncherAction(ActionBase):
         self._source_ids: list[str] = ["default"]
 
         self._color_mode_row: Adw.ComboRow | None = None
+        self._peak_color_row: Adw.ActionRow | None = None
         self._stop_rows: list[Adw.ActionRow] = []
 
     def on_ready(self):
@@ -185,15 +186,29 @@ class DeckWaveLauncherAction(ActionBase):
         )
         style_group.add(bg_row)
 
+        # Peak Hold Indicator Toggle Switch
+        show_peaks = settings.get("show_peaks", True)
+        peak_switch = Gtk.Switch()
+        peak_switch.set_active(show_peaks)
+        peak_switch.set_valign(Gtk.Align.CENTER)
+        peak_switch.connect("state-set", self._on_peaks_toggle)
+
+        peaks_row = Adw.ActionRow()
+        peaks_row.set_title("Peak Hold Indicator")
+        peaks_row.set_subtitle("Display floating peak caps at the top of the audio bars")
+        peaks_row.add_suffix(peak_switch)
+        style_group.add(peaks_row)
+
         # Peak Cap Color Picker
         peak_hex = settings.get("peak_color", "#FFFFFF")
-        peak_row = self._create_color_row(
+        self._peak_color_row = self._create_color_row(
             title="Peak Indicator Color",
             current_hex=peak_hex,
             on_changed_cb=lambda hex_val: self._on_color_setting_changed("peak_color", hex_val),
             dialog_title="Select Peak Indicator Color"
         )
-        style_group.add(peak_row)
+        self._peak_color_row.set_visible(show_peaks)
+        style_group.add(self._peak_color_row)
 
         group.add(style_group)
 
@@ -335,6 +350,17 @@ class DeckWaveLauncherAction(ActionBase):
             self.set_settings(settings)
             if hasattr(self.plugin_base, "set_global_settings"):
                 self.plugin_base.set_global_settings(settings)
+
+    def _on_peaks_toggle(self, switch, state):
+        settings = self.get_settings()
+        val = bool(state)
+        settings["show_peaks"] = val
+        self.set_settings(settings)
+        if hasattr(self.plugin_base, "set_global_settings"):
+            self.plugin_base.set_global_settings(settings)
+        if self._peak_color_row is not None:
+            self._peak_color_row.set_visible(val)
+        return False
 
     def _create_color_row(
         self,

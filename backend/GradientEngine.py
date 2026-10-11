@@ -96,7 +96,8 @@ class GradientEngine:
         bg_color_hex: str = "#141416",
         peak_color_hex: str = "#FFFFFF",
         bar_style: str = "solid",
-        bar_margin: int = 4
+        bar_margin: int = 4,
+        show_peaks: bool = True
     ) -> Image.Image:
         """
         Renders a single key's portion of an audio bar.
@@ -191,8 +192,8 @@ class GradientEngine:
                 active_slice = full_strip.crop((0, active_strip_y0, key_width, active_strip_y1))
                 img.paste(active_slice, (0, key_height - fill_pixels), active_slice)
 
-        # Peak indicator line (if peak falls within this key)
-        if peak_level > 0.0 and (row_min_level <= peak_level <= row_max_level):
+        # Peak indicator line (if enabled and peak falls within this key)
+        if show_peaks and peak_level > 0.0 and (row_min_level <= peak_level <= row_max_level):
             peak_fill = (peak_level - row_min_level) / row_height_span
             peak_y = int(key_height - 1 - (peak_fill * (key_height - 1)))
             peak_y = max(1, min(key_height - 2, peak_y))
